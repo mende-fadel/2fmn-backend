@@ -9,7 +9,10 @@ dotenv.config();
 const app = express();
 
 // Middlewares
-app.use(cors());
+app.use(cors({
+  origin: ["https://2fmn-website.vercel.app"], // ajoute localhost en dev si besoin
+  credentials: false
+}));
 app.use(express.json());
 
 // Routes
