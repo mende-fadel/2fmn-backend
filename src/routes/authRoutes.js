@@ -191,5 +191,11 @@ router.put("/admin/users/:id", auth, isAdmin, async (req, res) => {
     res.status(500).json({ error: "Erreur mise à jour par Admin" });
   }
 });
+// GET /api/auth/me
+router.get("/me", auth, async (req, res) => {
+  const user = await User.findById(req.user.id).select("-password");
+  res.json(user);
+});
+
 
 export default router;
