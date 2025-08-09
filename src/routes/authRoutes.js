@@ -57,7 +57,7 @@ router.post("/login", async (req, res) => {
     if (!isMatch) return res.status(401).json({ error: "Mot de passe incorrect" });
 
     // Générer le token JWT
-    const token = jwt.sign({ id: user._id }, process.env.JWT_SECRET, { expiresIn: "1d" });
+    const token = jwt.sign({ id: user._id }, process.env.JWT_SECRET, { expiresIn: "30d" });
 
     // ✅ ➕ Inclure le rôle dans la réponse
     res.json({
@@ -193,9 +193,13 @@ router.put("/admin/users/:id", auth, isAdmin, async (req, res) => {
 });
 // GET /api/auth/me
 router.get("/me", auth, async (req, res) => {
-  const user = await User.findById(req.user.id).select("-password");
-  res.json(user);
+  try {
+    const user = await User.findById(req.user.id).select("-password");
+    if (!user) return res.status(404).json({ error: "Utilisateur introuvable" });
+    res.json({ user });
+  } catch (e) {
+    res.status(500).json({ error: "Erreur serveur" });
+  }
 });
-
 
 export default router;
