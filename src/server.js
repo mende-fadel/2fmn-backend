@@ -15,7 +15,8 @@ const app = express();
 // --- CORS (prod + local dev) ---
 const allowedOrigins = [
   "https://2fmn-website.vercel.app",
-  "https://twofmn-backend.onrender.com", // Render health checks / same origin requests
+  "https://2fmnmanagementltd.com",
+  "https://api.2fmnmanagementltd.com", // Render health checks / same origin requests
   "http://localhost:5173",               // optional: local dev
 ];
 app.use(
