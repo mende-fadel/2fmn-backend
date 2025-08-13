@@ -1,103 +1,101 @@
+// src/routes/paymentRoutes.js
 import express from "express";
-import Payment from "../models/Payment.js";
-import User from "../models/User.js";
 import PDFDocument from "pdfkit";
 import fs from "fs";
 import path from "path";
 import nodemailer from "nodemailer";
 import auth from "../middleware/auth.js";
 import isAdmin from "../middleware/isAdmin.js";
+import Payment from "../models/Payment.js";
+import User from "../models/User.js";
 
 const router = express.Router();
 
+// POST /api/payments/pay  → enregistre + PDF + email
 router.post("/pay", auth, isAdmin, async (req, res) => {
-  console.log("📩 [API] Paiement reçu :", req.body);
-
   try {
-    const { creatorId, amount, method } = req.body;
+    const { creatorId, amount, method, period, note } = req.body;
 
-    // 🔍 Étape 1 - Vérification du créateur
-    console.log("🔍 Étape 1 - Recherche du créateur...");
+    console.log("📩 [API] Paiement reçu :", { creatorId, amount, method, period });
+
+    // 1) Créateur
     const creator = await User.findById(creatorId);
-    if (!creator) {
-      console.log("❌ Créateur introuvable");
-      return res.status(404).json({ error: "Créateur introuvable" });
-    }
+    if (!creator) return res.status(404).json({ error: "Créateur introuvable" });
     console.log("✅ Créateur trouvé :", creator.email);
 
-    // 💾 Étape 2 - Sauvegarde du paiement
-    console.log("💾 Étape 2 - Enregistrement paiement en base...");
-    const payment = new Payment({
+    // 2) Enregistrer paiement
+    const payment = await Payment.create({
       creator: creator._id,
       amount,
-      method,
-      date: new Date()
+      method: method || "virement",
+      period,
+      note,
+      date: new Date(),
     });
-    await payment.save();
     console.log("✅ Paiement enregistré avec succès");
 
-    // 🧾 Étape 3 - Génération PDF
-    console.log("🧾 Étape 3 - Génération du PDF...");
+    // 3) Générer PDF
     const receiptsDir = path.resolve("receipts");
     if (!fs.existsSync(receiptsDir)) fs.mkdirSync(receiptsDir);
 
-    const pdfPath = `${receiptsDir}/reçu_${creator.email}_${Date.now()}.pdf`;
-    const doc = new PDFDocument();
+    const safeEmail = creator.email.replace(/[^\w.@-]/g, "_");
+    const pdfPath = path.join(
+      receiptsDir,
+      `reçu_${safeEmail}_${Date.now()}.pdf`
+    );
+
+    const doc = new PDFDocument({ size: "A4", margin: 40 });
     doc.pipe(fs.createWriteStream(pdfPath));
 
+    // logo (optionnel)
     const logoPath = path.resolve("public/logo.png");
-    console.log("📂 Logo attendu ici :", logoPath);
-
     if (fs.existsSync(logoPath)) {
-      doc.image(logoPath, 50, 45, { width: 70 });
-      console.log("✅ Logo ajouté au PDF");
-    } else {
-      console.log("⚠️ Logo introuvable");
+      doc.image(logoPath, 40, 40, { width: 70 });
     }
+    doc.fontSize(20).text("Reçu de paiement – 2FMN Management Ltd.", 120, 50);
+    doc.moveDown(2);
 
-    doc.fontSize(20).text("Reçu de paiement – 2FMN Management Ltd.", 130, 50);
-    doc.moveDown();
-    doc.fontSize(14).text(`Créateur : ${creator.email}`);
+    doc.fontSize(12).text(`Créateur : ${creator.email}`);
+    if (period) doc.text(`Période : ${period}`);
+    if (note) doc.text(`Note : ${note}`);
     doc.text(`Montant : ${amount} €`);
-    doc.text(`Méthode : ${method}`);
+    doc.text(`Méthode : ${method || "virement"}`);
     doc.text(`Date : ${new Date().toLocaleDateString()}`);
-    doc.end();
+    doc.moveDown();
+    doc.text("Merci pour votre collaboration.", { align: "left" });
 
+    doc.end();
     console.log("✅ PDF généré :", pdfPath);
 
-    // 📧 Étape 4 - Envoi de l'email
-    console.log("📧 Étape 4 - Envoi email...");
+    // 4) Envoi d'email
     const transporter = nodemailer.createTransport({
       service: "gmail",
-      auth: {
-        user: process.env.EMAIL_USER,
-        pass: process.env.EMAIL_PASS
-      }
+      auth: { user: process.env.EMAIL_USER, pass: process.env.EMAIL_PASS },
     });
 
     await transporter.sendMail({
       from: `"2FMN Management" <${process.env.EMAIL_USER}>`,
       to: creator.email,
-      subject: "Reçu de votre paiement",
-      text: `Bonjour ${creator.email},\n\nVoici votre reçu de paiement pour ${amount} €.\nMerci de faire partie de 2FMN Management.\n\n– L'équipe 2FMN`,
-      attachments: [{ filename: "reçu.pdf", path: pdfPath }]
+      subject: "Votre reçu de paiement",
+      text: `Bonjour,\n\nVeuillez trouver ci-joint votre reçu de paiement de ${amount} €.\n\n— 2FMN Management`,
+      attachments: [{ filename: "reçu.pdf", path: pdfPath }],
     });
+    console.log("✅ Email envoyé");
 
-    console.log("✅ Email envoyé !");
-    res.json({ message: "✅ Paiement OK + PDF + email !" });
-
+    res.json({ message: "OK", payment });
   } catch (err) {
-    console.error("🔥 ERREUR DANS /pay :", err);
-    res.status(500).json({ error: "❌ Erreur lors du paiement" });
+    console.error("🔥 Erreur paiement:", err);
+    res.status(500).json({ error: "Erreur lors du paiement" });
   }
 });
 
-router.get("/", auth, isAdmin, async (req, res) => {
+// GET /api/payments  → historique (admin uniquement)
+router.get("/", auth, isAdmin, async (_req, res) => {
   try {
-    const payments = await Payment.find().populate("creator", "email");
+    const payments = await Payment.find().populate("creator", "email").sort({ date: -1 });
     res.json(payments);
   } catch (err) {
-    res.status(500).json({ error: "❌ Erreur chargement historique" });
+    res.status(500).json({ error: "Erreur chargement historique" });
   }
 });
 
