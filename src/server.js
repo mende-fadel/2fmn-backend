@@ -10,6 +10,7 @@ import statsRoutes from "./routes/statsRoutes.js";
 import creatorRoutes from "./routes/creatorRoutes.js";
 import adminCreatorsRoutes from "./routes/adminCreatorsRoutes.js";
 import contactRoutes from "./routes/contactRoutes.js";
+import uploadRoutes from "./routes/uploadRoutes.js";
 dotenv.config();
 
 const app = express();
@@ -45,6 +46,7 @@ app.use("/api/stats", statsRoutes);
 app.use("/api/creator", creatorRoutes);
 app.use("/api/admin", adminCreatorsRoutes);
 app.use("/api/contact", contactRoutes);
+app.use("/api/upload", uploadRoutes);
 // --- Start server *after* DB is connected ---
 const PORT = process.env.PORT || 5000;
 const MONGO_URI = process.env.MONGO_URI;
