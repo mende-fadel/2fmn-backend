@@ -7,7 +7,9 @@ import dotenv from "dotenv";
 import authRoutes from "./routes/authRoutes.js";
 import paymentRoutes from "./routes/paymentRoutes.js";
 import statsRoutes from "./routes/statsRoutes.js";
-
+import creatorRoutes from "./routes/creatorRoutes.js";
+import adminCreatorsRoutes from "./routes/adminCreatorsRoutes.js";
+import contactRoutes from "./routes/contactRoutes.js";
 dotenv.config();
 
 const app = express();
@@ -40,7 +42,9 @@ app.get("/", (_req, res) => {
 app.use("/api/auth", authRoutes);
 app.use("/api/payments", paymentRoutes);
 app.use("/api/stats", statsRoutes);
-
+app.use("/api/creator", creatorRoutes);
+app.use("/api/admin", adminCreatorsRoutes);
+app.use("/api/admin", contactRoutes);
 // --- Start server *after* DB is connected ---
 const PORT = process.env.PORT || 5000;
 const MONGO_URI = process.env.MONGO_URI;

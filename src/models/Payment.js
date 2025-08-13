@@ -1,11 +1,9 @@
-import mongoose from "mongoose";
-
-const paymentSchema = new mongoose.Schema({
-  creator: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true },
-  amount: { type: Number, required: true },
-  date: { type: Date, default: Date.now },
-  method: { type: String, default: "bank transfer" }, // Ex: virement, PayPal
-  note: { type: String }
+// /src/models/Payment.js
+const PaymentSchema = new mongoose.Schema({
+  creator: { type: mongoose.Schema.Types.ObjectId, ref: "User", index:true },
+  amount: Number,
+  method: String,     // virement, paypal, etc.
+  period: String,     // ex "2025-07" (facile pour filtres)
+  note: String,
+  date: { type: Date, default: Date.now }
 });
-
-export default mongoose.model("Payment", paymentSchema);
