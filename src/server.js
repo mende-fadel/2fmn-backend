@@ -44,7 +44,7 @@ app.use("/api/payments", paymentRoutes);
 app.use("/api/stats", statsRoutes);
 app.use("/api/creator", creatorRoutes);
 app.use("/api/admin", adminCreatorsRoutes);
-app.use("/api/creator", contactRoutes);
+app.use("/api/contact", contactRoutes);
 // --- Start server *after* DB is connected ---
 const PORT = process.env.PORT || 5000;
 const MONGO_URI = process.env.MONGO_URI;
