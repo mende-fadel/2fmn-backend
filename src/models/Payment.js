@@ -1,4 +1,5 @@
 // /src/models/Payment.js
+import mongoose from "mongoose";
 const PaymentSchema = new mongoose.Schema({
   creator: { type: mongoose.Schema.Types.ObjectId, ref: "User", index:true },
   amount: Number,
