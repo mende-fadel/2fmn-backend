@@ -1,100 +1,125 @@
+// src/routes/contactRoutes.js
 import express from "express";
 import rateLimit from "express-rate-limit";
 import nodemailer from "nodemailer";
-import ContactMessage from "../models/ContactMessage.js";
 
 const router = express.Router();
 
-// Limiter anti-abus (ex: 10 posts / 10 min par IP)
-const limiter = rateLimit({
-  windowMs: 10 * 60 * 1000,
-  max: 10,
-  standardHeaders: true,
-  legacyHeaders: false
+/* ---------- Health check (utile pour éviter les 404) ---------- */
+router.get("/", (_req, res) => {
+  res.json({ ok: true });
 });
 
-router.post("/", limiter, async (req, res) => {
+/* ------------------- Anti-spam basique ------------------- */
+const limiter = rateLimit({
+  windowMs: 60 * 1000, // 1 minute
+  max: 5,
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+router.use(limiter);
+
+/* ------------------- Helpers ------------------- */
+const isEmail = (v = "") =>
+  /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(v).trim());
+
+/* ------------------- POST /api/contact ------------------- */
+router.post("/", async (req, res) => {
   try {
-    const { name, email, subject, message, hp } = req.body;
+    const { name, email, message } = req.body || {};
 
-    // honeypot -> stop spam bots
-    if (hp && hp.trim() !== "") {
-      return res.status(200).json({ ok: true }); // faire comme si tout va bien
+    if (!name || !email || !message) {
+      return res
+        .status(400)
+        .json({ error: "CHAMPS_REQUIS", details: "name, email, message sont requis" });
+    }
+    if (!isEmail(email)) {
+      return res
+        .status(400)
+        .json({ error: "EMAIL_INVALIDE", details: "Merci de fournir un email valide" });
     }
 
-    if (!name || !email || !subject || !message) {
-      return res.status(400).json({ error: "Champs requis manquants." });
-    }
+    console.log("📨 /api/contact payload:", {
+      name: String(name).slice(0, 30),
+      email: (email || "").slice(0, 3) + "***",
+      msgLen: String(message).length,
+    });
 
-    // 1) Sauvegarde DB
-    const doc = await ContactMessage.create({ name, email, subject, message });
+    // Adresse de destination (configurable via env)
+    const TO = process.env.CONTACT_TO || "2fmn.management@gmail.com";
 
-    // 2) Transport mail (Gmail App Password ou SMTP pro)
+    // Transport SMTP (Gmail + mot de passe d’application recommandé)
     const transporter = nodemailer.createTransport({
-      host: process.env.SMTP_HOST || "smtp.gmail.com",
-      port: Number(process.env.SMTP_PORT || 465),
+      host: "smtp.gmail.com",
+      port: 465,
       secure: true,
       auth: {
-        user: process.env.EMAIL_USER, // ex: 2fmn.management@gmail.com
-        pass: process.env.EMAIL_PASS  // mot de passe d’application
-      }
+        user: process.env.EMAIL_USER,
+        pass: process.env.EMAIL_PASS,
+      },
     });
 
-    // 3) Email interne (à vous)
-    await transporter.sendMail({
+    // Vérifier la connexion SMTP (optionnel mais pratique)
+    await transporter.verify().catch((err) => {
+      console.error("❌ SMTP verify error:", err?.message);
+      throw new Error("SMTP_VERIFY_FAIL");
+    });
+
+    // 1) Mail pour l’admin
+    const adminMail = await transporter.sendMail({
       from: `"2FMN Website" <${process.env.EMAIL_USER}>`,
-      to: process.env.CONTACT_INBOX || process.env.EMAIL_USER,
-      subject: `📬 Nouveau message – ${subject}`,
+      to: TO,
       replyTo: email,
-      text:
-`Nom: ${name}
-Email: ${email}
-Sujet: ${subject}
-
-Message:
-${message}
-
-— ID: ${doc._id}`,
+      subject: `📩 Nouveau message de ${name}`,
       html: `
-        <h2>Nouveau message reçu</h2>
-        <p><b>Nom:</b> ${name}</p>
-        <p><b>Email:</b> ${email}</p>
-        <p><b>Sujet:</b> ${subject}</p>
-        <pre style="white-space:pre-wrap;font-family:inherit">${message}</pre>
-        <hr/>
-        <p style="color:#666">ID: ${doc._id} • ${new Date(doc.createdAt).toLocaleString()}</p>
-      `
+        <h2>Nouveau message via le site</h2>
+        <p><b>Nom :</b> ${escapeHtml(name)}</p>
+        <p><b>Email :</b> ${escapeHtml(email)}</p>
+        <p><b>Message :</b><br/>${escapeHtml(message).replace(/\n/g, "<br/>")}</p>
+      `,
     });
+    console.log("✅ Mail admin envoyé:", adminMail.messageId);
 
-    // 4) Accusé de réception à l’expéditeur
-    await transporter.sendMail({
+    // 2) Accusé de réception pour le visiteur
+    const ackMail = await transporter.sendMail({
       from: `"2FMN Management" <${process.env.EMAIL_USER}>`,
       to: email,
-      subject: "📫 Nous avons bien reçu votre message",
-      text:
-`Bonjour ${name},
-
-Merci d’avoir contacté 2FMN Management Ltd.
-Nous avons bien reçu votre message (“${subject}”) et revenons vers vous très vite.
-
-— L’équipe 2FMN
-https://2fmnmanagementltd.com`,
+      subject: "📩 Accusé de réception – 2FMN Management",
       html: `
-        <div style="font-family:system-ui, -apple-system, Segoe UI, Roboto, Arial;line-height:1.5">
-          <h2>Merci, ${name} 👋</h2>
-          <p>Nous avons bien reçu votre message (<i>${subject}</i>).</p>
-          <p>Un membre de l’équipe vous répondra rapidement.</p>
-          <p>— 2FMN Management Ltd<br/>
-          <a href="https://2fmnmanagementltd.com">2fmnmanagementltd.com</a></p>
-        </div>
-      `
+        <p>Bonjour ${escapeHtml(name)},</p>
+        <p>Nous avons bien reçu votre message et vous répondrons très rapidement.</p>
+        <p><b>Récapitulatif :</b></p>
+        <blockquote>${escapeHtml(message).replace(/\n/g, "<br/>")}</blockquote>
+        <p>— L'équipe 2FMN Management</p>
+      `,
     });
+    console.log("✅ Mail accusé envoyé:", ackMail.messageId);
 
-    return res.json({ ok: true, message: "Message envoyé. Merci !" });
+    return res.json({ success: true });
   } catch (err) {
-    console.error("Contact error:", err);
-    return res.status(500).json({ error: "Envoi impossible pour le moment." });
+    console.error("🔥 /api/contact error:", err);
+
+    if (err?.message === "SMTP_VERIFY_FAIL") {
+      return res.status(500).json({
+        error: "SMTP_FAIL",
+        details:
+          "Vérifie EMAIL_USER / EMAIL_PASS (mot de passe d’application Gmail) et l’accès SMTP.",
+      });
+    }
+    return res
+      .status(500)
+      .json({ error: "SERVEUR", details: "Erreur lors de l’envoi. Réessaie plus tard." });
   }
 });
+
+/* ------------------- petit utilitaire anti-injection ------------------- */
+function escapeHtml(str = "") {
+  return String(str)
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#039;");
+}
 
 export default router;
