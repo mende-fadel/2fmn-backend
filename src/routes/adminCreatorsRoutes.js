@@ -29,4 +29,26 @@ router.post("/creators/:id/stats", auth, isAdmin, async (req,res)=>{
   res.json(updated);
 });
 
+// Exemple Express.js
+router.post("/admin/creators", async (req, res) => {
+  const { email, firstName, lastName, bio, profilePic, socials, role } = req.body;
+
+  const existing = await User.findOne({ email });
+  if (existing) return res.status(400).json({ error: "Email déjà utilisé." });
+
+  const newUser = new User({
+    email,
+    firstName,
+    lastName,
+    bio,
+    profilePic,
+    socials,
+    role: role || "creator"
+  });
+
+  await newUser.save();
+  res.status(201).json(newUser);
+});
+
+
 export default router;
