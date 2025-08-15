@@ -30,11 +30,18 @@ router.post("/creators/:id/stats", auth, isAdmin, async (req,res)=>{
 });
 
 // Exemple Express.js
-router.post("/admin/creators", async (req, res) => {
-  const { email, firstName, lastName, bio, profilePic, socials, role } = req.body;
+// POST /api/admin/creators
+router.post("/creators", auth, isAdmin, async (req, res) => {
+  const { email, firstName, lastName, bio, profilePic, socials, role, password } = req.body;
+
+  if (!email || !password) {
+    return res.status(400).json({ error: "Email et mot de passe requis." });
+  }
 
   const existing = await User.findOne({ email });
   if (existing) return res.status(400).json({ error: "Email déjà utilisé." });
+
+  const hashedPassword = await bcrypt.hash(password, 10);
 
   const newUser = new User({
     email,
@@ -43,12 +50,12 @@ router.post("/admin/creators", async (req, res) => {
     bio,
     profilePic,
     socials,
+    password: hashedPassword,
     role: role || "creator"
   });
 
   await newUser.save();
   res.status(201).json(newUser);
 });
-
 
 export default router;
