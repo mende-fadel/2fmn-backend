@@ -4,6 +4,7 @@ import auth from "../middleware/auth.js";
 import isAdmin from "../middleware/isAdmin.js";
 import User from "../models/User.js";
 import CreatorStat from "../models/CreatorStat.js";
+import bcrypt from "bcryptjs";
 
 const router = express.Router();
 
