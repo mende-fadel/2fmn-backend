@@ -20,7 +20,7 @@ router.get("/me", auth, async (req,res)=>{
 router.get("/performance", auth, async (req,res)=>{
   try{
     const { from, to } = req.query; // "YYYY-MM"
-    const q = { creator: req.user.id };
+    const q = { user: req.user.id };
     if (from && to) q.month = { $gte: from, $lte: to };
     const stats = await CreatorStat.find(q).sort({ month:1 });
     res.json(stats);

@@ -1,4 +1,3 @@
-// server.js
 import express from "express";
 import mongoose from "mongoose";
 import cors from "cors";
@@ -15,12 +14,11 @@ dotenv.config();
 
 const app = express();
 
-// --- CORS (prod + local dev) ---
 const allowedOrigins = [
   "https://2fmn-website.vercel.app",
   "https://2fmnmanagementltd.com",
-  "https://api.2fmnmanagementltd.com", // Render health checks / same origin requests
-  "http://localhost:5173",               // optional: local dev
+  "https://api.2fmnmanagementltd.com",
+  "http://localhost:5173",
 ];
 app.use(
   cors({
@@ -34,12 +32,10 @@ app.use(
 
 app.use(express.json());
 
-// --- Health check / root route (useful for 503s) ---
 app.get("/", (_req, res) => {
-  res.send("2FMN backend OK ✅");
+  res.send("2FMN backend OK");
 });
 
-// --- API routes ---
 app.use("/api/auth", authRoutes);
 app.use("/api/payments", paymentRoutes);
 app.use("/api/stats", statsRoutes);
@@ -47,24 +43,24 @@ app.use("/api/creator", creatorRoutes);
 app.use("/api/admin", adminCreatorsRoutes);
 app.use("/api/contact", contactRoutes);
 app.use("/api/upload", uploadRoutes);
-// --- Start server *after* DB is connected ---
+
 const PORT = process.env.PORT || 5000;
 const MONGO_URI = process.env.MONGO_URI;
 
 if (!MONGO_URI) {
-  console.error("❌ Missing MONGO_URI env var");
+  console.error("Missing MONGO_URI env var");
   process.exit(1);
 }
 
 mongoose
   .connect(MONGO_URI)
   .then(() => {
-    console.log("✅ Connecté à MongoDB");
+    console.log("Connected to MongoDB");
     app.listen(PORT, () =>
-      console.log(`🚀 Serveur backend sur port ${PORT}`)
+      console.log(`Server running on port ${PORT}`)
     );
   })
   .catch((err) => {
-    console.error("❌ Erreur MongoDB :", err);
-    process.exit(1); // Let Render restart the service
+    console.error("MongoDB connection error:", err);
+    process.exit(1);
   });

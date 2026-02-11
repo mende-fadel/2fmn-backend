@@ -11,10 +11,14 @@ const router = express.Router();
 // REGISTER
 router.post("/register", async (req, res) => {
   try {
-    const { firstName, lastName, email, password, role } = req.body;
+    const { firstName, lastName, email, password } = req.body;
+
+    if (!email || !password) {
+      return res.status(400).json({ error: "Email et mot de passe requis" });
+    }
 
     const existingUser = await User.findOne({ email });
-    if (existingUser) return res.status(400).json({ error: "Cet utilisateur existe déjà" });
+    if (existingUser) return res.status(400).json({ error: "Cet utilisateur existe deja" });
 
     const hashedPassword = await bcrypt.hash(password, 10);
 
@@ -23,11 +27,11 @@ router.post("/register", async (req, res) => {
       lastName,
       email,
       password: hashedPassword,
-      role: role || "creator"
+      role: "creator"
     });
 
     await user.save();
-    res.status(201).json({ message: "Utilisateur créé ✅" });
+    res.status(201).json({ message: "Utilisateur cree avec succes" });
   } catch (error) {
     console.error(error);
     res.status(500).json({ error: "Erreur création utilisateur" });
@@ -45,7 +49,6 @@ router.post("/login", async (req, res) => {
     const isMatch = await bcrypt.compare(password, user.password);
     if (!isMatch) return res.status(401).json({ error: "Mot de passe incorrect" });
 
-    // 🔐 inclure le rôle dans le token
     const token = jwt.sign(
       { id: user._id, role: user.role },
       process.env.JWT_SECRET,
@@ -69,7 +72,7 @@ router.put("/profile", auth, async (req, res) => {
       { firstName, lastName, profilePic },
       { new: true }
     ).select("-password");
-    res.json({ message: "✅ Profil mis à jour", user });
+    res.json({ message: "Profil mis a jour", user });
   } catch (error) {
     console.error(error);
     res.status(500).json({ error: "Erreur mise à jour profil" });
@@ -113,7 +116,7 @@ router.put("/admin/users/:id/revenus", auth, isAdmin, async (req, res) => {
   try {
     const { revenus } = req.body;
     const user = await User.findByIdAndUpdate(req.params.id, { revenus }, { new: true });
-    res.json({ message: "Revenus mis à jour ✅", user });
+    res.json({ message: "Revenus mis a jour", user });
   } catch (err) {
     res.status(500).json({ error: "Erreur mise à jour revenus" });
   }
@@ -122,7 +125,7 @@ router.put("/admin/users/:id/revenus", auth, isAdmin, async (req, res) => {
 router.delete("/admin/users/:id", auth, isAdmin, async (req, res) => {
   try {
     await User.findByIdAndDelete(req.params.id);
-    res.json({ message: "Utilisateur supprimé ✅" });
+    res.json({ message: "Utilisateur supprime" });
   } catch (err) {
     res.status(500).json({ error: "Erreur suppression utilisateur" });
   }

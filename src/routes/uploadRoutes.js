@@ -2,9 +2,17 @@
 import express from "express";
 import multer from "multer";
 import { v2 as cloudinary } from "cloudinary";
+import auth from "../middleware/auth.js";
 
 const router = express.Router();
-const upload = multer({ storage: multer.memoryStorage() });
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 5 * 1024 * 1024 },
+  fileFilter: (_req, file, cb) => {
+    if (file.mimetype.startsWith("image/")) return cb(null, true);
+    cb(new Error("Seules les images sont acceptees"));
+  },
+});
 
 // Config Cloudinary (depuis env)
 cloudinary.config({
@@ -14,7 +22,7 @@ cloudinary.config({
 });
 
 // POST /api/upload/image  (body: form-data, field: "file")
-router.post("/image", upload.single("file"), async (req, res) => {
+router.post("/image", auth, upload.single("file"), async (req, res) => {
   try {
     if (!req.file) return res.status(400).json({ error: "NO_FILE" });
 
@@ -33,7 +41,7 @@ router.post("/image", upload.single("file"), async (req, res) => {
     // result.secure_url / result.public_id
     res.json({ url: result.secure_url, public_id: result.public_id });
   } catch (e) {
-    console.error("🔥 upload error:", e);
+    console.error("Upload error:", e);
     res.status(500).json({ error: "UPLOAD_FAIL" });
   }
 });

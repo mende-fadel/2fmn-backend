@@ -1,4 +1,3 @@
-// src/routes/paymentRoutes.js
 import express from "express";
 import PDFDocument from "pdfkit";
 import fs from "fs";
@@ -11,19 +10,14 @@ import User from "../models/User.js";
 
 const router = express.Router();
 
-// POST /api/payments/pay  → enregistre + PDF + email
+// POST /api/payments/pay
 router.post("/pay", auth, isAdmin, async (req, res) => {
   try {
     const { creatorId, amount, method, period, note } = req.body;
 
-    console.log("📩 [API] Paiement reçu :", { creatorId, amount, method, period });
-
-    // 1) Créateur
     const creator = await User.findById(creatorId);
-    if (!creator) return res.status(404).json({ error: "Créateur introuvable" });
-    console.log("✅ Créateur trouvé :", creator.email);
+    if (!creator) return res.status(404).json({ error: "Createur introuvable" });
 
-    // 2) Enregistrer paiement
     const payment = await Payment.create({
       creator: creator._id,
       amount,
@@ -32,42 +26,43 @@ router.post("/pay", auth, isAdmin, async (req, res) => {
       note,
       date: new Date(),
     });
-    console.log("✅ Paiement enregistré avec succès");
 
-    // 3) Générer PDF
+    // Generate PDF
     const receiptsDir = path.resolve("receipts");
     if (!fs.existsSync(receiptsDir)) fs.mkdirSync(receiptsDir);
 
     const safeEmail = creator.email.replace(/[^\w.@-]/g, "_");
-    const pdfPath = path.join(
-      receiptsDir,
-      `reçu_${safeEmail}_${Date.now()}.pdf`
-    );
+    const pdfPath = path.join(receiptsDir, `recu_${safeEmail}_${Date.now()}.pdf`);
 
     const doc = new PDFDocument({ size: "A4", margin: 40 });
-    doc.pipe(fs.createWriteStream(pdfPath));
+    const writeStream = fs.createWriteStream(pdfPath);
+    doc.pipe(writeStream);
 
-    // logo (optionnel)
     const logoPath = path.resolve("public/logo.png");
     if (fs.existsSync(logoPath)) {
       doc.image(logoPath, 40, 40, { width: 70 });
     }
-    doc.fontSize(20).text("Reçu de paiement – 2FMN Management Ltd.", 120, 50);
+    doc.fontSize(20).text("Recu de paiement - 2FMN Management Ltd.", 120, 50);
     doc.moveDown(2);
 
-    doc.fontSize(12).text(`Créateur : ${creator.email}`);
-    if (period) doc.text(`Période : ${period}`);
+    doc.fontSize(12).text(`Createur : ${creator.email}`);
+    if (period) doc.text(`Periode : ${period}`);
     if (note) doc.text(`Note : ${note}`);
-    doc.text(`Montant : ${amount} €`);
-    doc.text(`Méthode : ${method || "virement"}`);
+    doc.text(`Montant : ${amount} EUR`);
+    doc.text(`Methode : ${method || "virement"}`);
     doc.text(`Date : ${new Date().toLocaleDateString()}`);
     doc.moveDown();
     doc.text("Merci pour votre collaboration.", { align: "left" });
 
     doc.end();
-    console.log("✅ PDF généré :", pdfPath);
 
-    // 4) Envoi d'email
+    // Wait for PDF to be fully written before sending email
+    await new Promise((resolve, reject) => {
+      writeStream.on("finish", resolve);
+      writeStream.on("error", reject);
+    });
+
+    // Send email with PDF attachment
     const transporter = nodemailer.createTransport({
       service: "gmail",
       auth: { user: process.env.EMAIL_USER, pass: process.env.EMAIL_PASS },
@@ -76,20 +71,22 @@ router.post("/pay", auth, isAdmin, async (req, res) => {
     await transporter.sendMail({
       from: `"2FMN Management" <${process.env.EMAIL_USER}>`,
       to: creator.email,
-      subject: "Votre reçu de paiement",
-      text: `Bonjour,\n\nVeuillez trouver ci-joint votre reçu de paiement de ${amount} €.\n\n— 2FMN Management`,
-      attachments: [{ filename: "reçu.pdf", path: pdfPath }],
+      subject: "Votre recu de paiement - 2FMN Management",
+      text: `Bonjour,\n\nVeuillez trouver ci-joint votre recu de paiement de ${amount} EUR.\n\n-- 2FMN Management`,
+      attachments: [{ filename: "recu.pdf", path: pdfPath }],
     });
-    console.log("✅ Email envoyé");
+
+    // Clean up PDF file after sending
+    fs.unlink(pdfPath, () => {});
 
     res.json({ message: "OK", payment });
   } catch (err) {
-    console.error("🔥 Erreur paiement:", err);
+    console.error("Erreur paiement:", err);
     res.status(500).json({ error: "Erreur lors du paiement" });
   }
 });
 
-// GET /api/payments  → historique (admin uniquement)
+// GET /api/payments
 router.get("/", auth, isAdmin, async (_req, res) => {
   try {
     const payments = await Payment.find().populate("creator", "email").sort({ date: -1 });

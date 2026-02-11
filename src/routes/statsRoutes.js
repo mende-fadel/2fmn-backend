@@ -8,28 +8,29 @@ const router = express.Router();
 
 router.get("/", auth, isAdmin, async (req, res) => {
   try {
-    // 🔢 Compter les créateurs et admins
     const totalCreators = await User.countDocuments({ role: "creator" });
     const totalAdmins = await User.countDocuments({ role: "admin" });
 
-    // 💰 Récupérer les paiements par mois
-    const payments = await Payment.find();
+    // Aggregate monthly revenue via MongoDB pipeline instead of loading all into memory
+    const pipeline = await Payment.aggregate([
+      {
+        $group: {
+          _id: { $dateToString: { format: "%Y-%m", date: "$date" } },
+          total: { $sum: "$amount" },
+        },
+      },
+      { $sort: { _id: 1 } },
+    ]);
 
-    // 🗓 Organiser par mois (dernier 6 mois)
     const monthlyRevenue = {};
-    payments.forEach(p => {
-      const month = new Date(p.date).toLocaleString("fr-FR", { month: "short", year: "numeric" });
-      monthlyRevenue[month] = (monthlyRevenue[month] || 0) + p.amount;
+    pipeline.forEach((entry) => {
+      monthlyRevenue[entry._id] = entry.total;
     });
 
-    res.json({
-      totalCreators,
-      totalAdmins,
-      monthlyRevenue
-    });
+    res.json({ totalCreators, totalAdmins, monthlyRevenue });
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: "❌ Impossible de charger les stats" });
+    console.error("Stats error:", err);
+    res.status(500).json({ error: "Impossible de charger les stats" });
   }
 });
 
