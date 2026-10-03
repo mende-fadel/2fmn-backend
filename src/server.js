@@ -10,12 +10,18 @@ import creatorRoutes from "./routes/creatorRoutes.js";
 import adminCreatorsRoutes from "./routes/adminCreatorsRoutes.js";
 import contactRoutes from "./routes/contactRoutes.js";
 import uploadRoutes from "./routes/uploadRoutes.js";
+import reviewRoutes from "./routes/reviewRoutes.js";
 dotenv.config();
 
 const app = express();
 
+// Render passe par un proxy : nécessaire pour que la limite d'envois compte par visiteur.
+app.set("trust proxy", 1);
+
 const allowedOrigins = [
   "https://2fmn-website.vercel.app",
+  "https://2fmnmanagementltd.eu",
+  "https://www.2fmnmanagementltd.eu",
   "https://2fmnmanagementltd.com",
   "https://api.2fmnmanagementltd.com",
   "http://localhost:5173",
@@ -43,6 +49,7 @@ app.use("/api/creator", creatorRoutes);
 app.use("/api/admin", adminCreatorsRoutes);
 app.use("/api/contact", contactRoutes);
 app.use("/api/upload", uploadRoutes);
+app.use("/api/reviews", reviewRoutes);
 
 const PORT = process.env.PORT || 5000;
 const MONGO_URI = process.env.MONGO_URI;
